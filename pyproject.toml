@@ -1,0 +1,5 @@
+[project]
+name = "foxsd-ai"
+version = "0.1.0"
+description = "FoxSD AI model for programming, cybersecurity, and application development"
+requires-python = ">=3.10"
