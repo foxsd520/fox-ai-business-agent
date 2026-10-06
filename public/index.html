@@ -3,97 +3,110 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Fox AI | FoxSD</title>
-    <link rel="stylesheet" href="/styles.css" />
+    <title>FoxSD AI | وكيل ذكاء تجاري</title>
+    <link rel="stylesheet" href="/static/style.css" />
   </head>
   <body>
-    <div class="app-shell">
-      <header class="topbar">
-        <div>
-          <p class="eyebrow">وكيل ذكاء تجاري</p>
-          <h1>Fox AI</h1>
-        </div>
-        <div class="brand-box">
-          <span>FoxSD</span>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="logo-box">
+          <h2>🦊 FoxSD AI</h2>
+          <p>وكيل ذكاء تجاري</p>
           <small>foxsd520@gmail.com</small>
         </div>
-      </header>
 
-      <main class="dashboard">
-        <section class="summary-grid">
-          <article class="stat-card accent">
-            <label>العملاء</label>
-            <strong id="clientsCount">0</strong>
-          </article>
-          <article class="stat-card">
-            <label>المشاريع</label>
-            <strong id="projectsCount">0</strong>
-          </article>
-          <article class="stat-card">
-            <label>المهام</label>
-            <strong id="tasksCount">0</strong>
-          </article>
-          <article class="stat-card">
-            <label>المحادثات</label>
-            <strong id="conversationsCount">0</strong>
-          </article>
-        </section>
+        <nav class="nav-menu">
+          <button class="nav-item active" data-tab="chat">💬 المحادثة</button>
+          <button class="nav-item" data-tab="training">📚 التدريب</button>
+          <button class="nav-item" data-tab="history">📜 السجل</button>
+          <button class="nav-item" data-tab="stats">📊 الإحصائيات</button>
+        </nav>
+      </aside>
 
-        <section class="controls">
-          <div class="voice-panel">
-            <h2>أمر صوتي</h2>
-            <textarea id="voiceInput" placeholder="اكتب أو تحدث: أريد مشروع موقع، نظام إدارة، أو عميل جديد..."></textarea>
-            <div class="action-row">
-              <button id="voiceButton" class="primary-btn">🎙️ تفعيل الميكروفون</button>
-              <button id="submitVoiceBtn" class="secondary-btn">إرسال الأمر</button>
-            </div>
-            <div id="voiceStatus" class="status-box">جاهز للاستقبال.</div>
-          </div>
-
-          <div class="forms-panel">
-            <div class="form-card">
-              <h3>إضافة عميل</h3>
-              <form id="clientForm">
-                <input name="name" placeholder="اسم العميل" required />
-                <input name="email" type="email" placeholder="البريد الإلكتروني" />
-                <input name="phone" placeholder="رقم الهاتف" />
-                <textarea name="notes" placeholder="ملاحظات"></textarea>
-                <button type="submit">حفظ العميل</button>
-              </form>
+      <main class="main-content">
+        <!-- Chat Tab -->
+        <section id="chat" class="tab-content active">
+          <div class="chat-container">
+            <div class="chat-header">
+              <h1>🦊 FoxSD AI</h1>
+              <p>متخصص في البرمجة، الأمن السيبراني، وتطوير المواقع والتطبيقات</p>
             </div>
 
-            <div class="form-card">
-              <h3>إضافة مشروع</h3>
-              <form id="projectForm">
-                <input name="title" placeholder="عنوان المشروع" required />
-                <input name="type" placeholder="نوع المشروع (موقع/تطبيق/نظام)" />
-                <input name="budget" type="number" placeholder="ميزانية المشروع" />
-                <textarea name="notes" placeholder="تفاصيل المشروع"></textarea>
-                <button type="submit">حفظ المشروع</button>
-              </form>
+            <div class="messages-box" id="messagesBox"></div>
+
+            <div class="input-area">
+              <textarea
+                id="userInput"
+                placeholder="اسأل عن البرمجة، الأمن السيبراني، تطوير المواقع أو التطبيقات..."
+              ></textarea>
+              <button id="sendBtn" class="send-btn">إرسال 🚀</button>
             </div>
           </div>
         </section>
 
-        <section class="lists-grid">
-          <article class="list-card">
-            <h2>العملاء</h2>
-            <ul id="clientsList"></ul>
-          </article>
+        <!-- Training Tab -->
+        <section id="training" class="tab-content">
+          <div class="panel">
+            <h2>إضافة مادة تدريبية</h2>
+            <form id="trainingForm">
+              <div class="form-group">
+                <label>الفئة:</label>
+                <select id="trainCategory" required>
+                  <option value="">اختر الفئة</option>
+                  <option value="programming">البرمجة</option>
+                  <option value="cybersecurity">الأمن السيبراني</option>
+                  <option value="web-development">تطوير المواقع</option>
+                  <option value="app-development">تطوير التطبيقات</option>
+                  <option value="business">الأعمال التجارية</option>
+                </select>
+              </div>
 
-          <article class="list-card">
-            <h2>المشاريع</h2>
-            <ul id="projectsList"></ul>
-          </article>
+              <div class="form-group">
+                <label>المحتوى:</label>
+                <textarea id="trainContent" required></textarea>
+              </div>
 
-          <article class="list-card wide">
-            <h2>المهام</h2>
-            <ul id="tasksList"></ul>
-          </article>
+              <div class="form-group">
+                <label>الكلمات المفتاحية (مفصولة بفواصل):</label>
+                <input type="text" id="trainKeywords" />
+              </div>
+
+              <button type="submit" class="btn-primary">إضافة المادة</button>
+            </form>
+          </div>
+        </section>
+
+        <!-- History Tab -->
+        <section id="history" class="tab-content">
+          <div class="panel">
+            <h2>سجل المحادثات</h2>
+            <div id="historyBox"></div>
+          </div>
+        </section>
+
+        <!-- Stats Tab -->
+        <section id="stats" class="tab-content">
+          <div class="panel">
+            <h2>إحصائيات النظام</h2>
+            <div class="stats-grid">
+              <div class="stat-card">
+                <span class="stat-label">إجمالي المحادثات</span>
+                <span class="stat-value" id="statConversations">0</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-label">مواد التدريب</span>
+                <span class="stat-value" id="statTraining">0</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-label">المستخدمون</span>
+                <span class="stat-value" id="statUsers">0</span>
+              </div>
+            </div>
+          </div>
         </section>
       </main>
     </div>
 
-    <script src="/app.js"></script>
+    <script src="/static/app.js"></script>
   </body>
 </html>
