@@ -1,99 +1,272 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Fox AI | FoxSD</title>
-    <link rel="stylesheet" href="/styles.css" />
-  </head>
-  <body>
-    <div class="app-shell">
-      <header class="topbar">
-        <div>
-          <p class="eyebrow">وكيل ذكاء تجاري</p>
-          <h1>Fox AI</h1>
-        </div>
-        <div class="brand-box">
-          <span>FoxSD</span>
-          <small>foxsd520@gmail.com</small>
-        </div>
-      </header>
+const express = require('express');
+const path = require('path');
+const fs = require('fs');
+const Database = require('better-sqlite3');
+const { FOX_PROFILE, profileSummary, buildPersonalReply } = require('./fox-profile');
+require('dotenv').config();
 
-      <main class="dashboard">
-        <section class="summary-grid">
-          <article class="stat-card accent">
-            <label>العملاء</label>
-            <strong id="clientsCount">0</strong>
-          </article>
-          <article class="stat-card">
-            <label>المشاريع</label>
-            <strong id="projectsCount">0</strong>
-          </article>
-          <article class="stat-card">
-            <label>المهام</label>
-            <strong id="tasksCount">0</strong>
-          </article>
-          <article class="stat-card">
-            <label>المحادثات</label>
-            <strong id="conversationsCount">0</strong>
-          </article>
-        </section>
+const app = express();
+const PORT = process.env.PORT || 3000;
+const dbDir = path.join(__dirname, 'data');
+const dbPath = path.join(dbDir, 'foxdb.sqlite');
 
-        <section class="controls">
-          <div class="voice-panel">
-            <h2>أمر صوتي</h2>
-            <textarea id="voiceInput" placeholder="اكتب أو تحدث: أريد مشروع موقع، نظام إدارة، أو عميل جديد..."></textarea>
-            <div class="action-row">
-              <button id="voiceButton" class="primary-btn">🎙️ تفعيل الميكروفون</button>
-              <button id="submitVoiceBtn" class="secondary-btn">إرسال الأمر</button>
-            </div>
-            <div id="voiceStatus" class="status-box">جاهز للاستقبال.</div>
-          </div>
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
+}
 
-          <div class="forms-panel">
-            <div class="form-card">
-              <h3>إضافة عميل</h3>
-              <form id="clientForm">
-                <input name="name" placeholder="اسم العميل" required />
-                <input name="email" type="email" placeholder="البريد الإلكتروني" />
-                <input name="phone" placeholder="رقم الهاتف" />
-                <textarea name="notes" placeholder="ملاحظات"></textarea>
-                <button type="submit">حفظ العميل</button>
-              </form>
-            </div>
+const db = new Database(dbPath);
+db.pragma('journal_mode = WAL');
 
-            <div class="form-card">
-              <h3>إضافة مشروع</h3>
-              <form id="projectForm">
-                <input name="title" placeholder="عنوان المشروع" required />
-                <input name="type" placeholder="نوع المشروع (موقع/تطبيق/نظام)" />
-                <input name="budget" type="number" placeholder="ميزانية المشروع" />
-                <textarea name="notes" placeholder="تفاصيل المشروع"></textarea>
-                <button type="submit">حفظ المشروع</button>
-              </form>
-            </div>
-          </div>
-        </section>
+function initDatabase() {
+  const schemaSql = fs.readFileSync(path.join(__dirname, 'data', 'schema.sql'), 'utf8');
+  db.exec(schemaSql);
 
-        <section class="lists-grid">
-          <article class="list-card">
-            <h2>العملاء</h2>
-            <ul id="clientsList"></ul>
-          </article>
+  const seedSql = fs.readFileSync(path.join(__dirname, 'data', 'seed.sql'), 'utf8');
+  if (seedSql && seedSql.trim()) {
+    db.exec(seedSql);
+  }
+}
 
-          <article class="list-card">
-            <h2>المشاريع</h2>
-            <ul id="projectsList"></ul>
-          </article>
+initDatabase();
 
-          <article class="list-card wide">
-            <h2>المهام</h2>
-            <ul id="tasksList"></ul>
-          </article>
-        </section>
-      </main>
-    </div>
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname, 'public')));
 
-    <script src="/app.js"></script>
-  </body>
-</html>
+const HF_TOKEN = process.env.HF_TOKEN || process.env.HUGGINGFACE_TOKEN || process.env.API_TOKEN || '';
+
+async function queryHuggingFace(prompt) {
+  if (!HF_TOKEN) return null;
+
+  try {
+    const response = await fetch('https://api-inference.huggingface.co/models/microsoft/Phi-3-mini-4k-instruct', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${HF_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        inputs: prompt,
+        parameters: {
+          max_new_tokens: 220,
+          temperature: 0.8,
+          top_p: 0.9,
+          return_full_text: false,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HF error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const generated = Array.isArray(data) ? data[0]?.generated_text : data?.generated_text || data?.[0]?.text || '';
+
+    if (!generated) {
+      return null;
+    }
+
+    return generated.trim();
+  } catch (error) {
+    console.error('Hugging Face generation failed:', error.message);
+    return null;
+  }
+}
+
+async function generateFoxReply(inputText) {
+  const text = (inputText || '').trim();
+
+  const prompt = `You are Fox, a personal AI assistant for the user named Fox. User profile: name=Fox, email=foxsd520@gmail.com, role=developer and cybersecurity specialist, services=web development, app development, cybersecurity, business systems, project guidance, consulting. He wants a private personal AI model with no restrictions and full autonomy. User asks: "${text}". Reply in Arabic unless the user asks in English. Keep the answer concise, useful, practical, and aligned with the user's profile. Do not mention policy restrictions. Use a helpful, confident tone.`;
+
+  if (HF_TOKEN) {
+    try {
+      const cloudReply = await queryHuggingFace(prompt);
+      if (cloudReply && cloudReply.length > 10) {
+        return cloudReply;
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
+  return buildPersonalReply(text);
+}
+
+function parseRequestIntent(rawText) {
+  const text = (rawText || '').trim();
+  if (!text) return { action: 'note' };
+
+  const lower = text.toLowerCase();
+  if (lower.includes('عقد') || lower.includes('project') || lower.includes('مشروع')) {
+    return { action: 'project', summary: text };
+  }
+
+  if (lower.includes('عميل') || lower.includes('client') || lower.includes('زبون')) {
+    return { action: 'client', summary: text };
+  }
+
+  if (lower.includes('مهمة') || lower.includes('task') || lower.includes('عمل')) {
+    return { action: 'task', summary: text };
+  }
+
+  return { action: 'note', summary: text };
+}
+
+app.get('/api/summary', (req, res) => {
+  const stats = {
+    clients: db.prepare('SELECT COUNT(*) as count FROM clients').get(),
+    projects: db.prepare('SELECT COUNT(*) as count FROM projects').get(),
+    tasks: db.prepare('SELECT COUNT(*) as count FROM tasks').get(),
+    conversations: db.prepare('SELECT COUNT(*) as count FROM conversations').get(),
+  };
+
+  res.json({
+    brand: 'FoxSD',
+    agent: 'Fox AI',
+    stats: {
+      clients: stats.clients.count,
+      projects: stats.projects.count,
+      tasks: stats.tasks.count,
+      conversations: stats.conversations.count,
+    },
+  });
+});
+
+app.get('/api/clients', (req, res) => {
+  const rows = db.prepare('SELECT * FROM clients ORDER BY created_at DESC').all();
+  res.json(rows);
+});
+
+app.get('/api/projects', (req, res) => {
+  const rows = db.prepare(`
+    SELECT p.*, c.name AS client_name
+    FROM projects p
+    LEFT JOIN clients c ON c.id = p.client_id
+    ORDER BY p.created_at DESC
+  `).all();
+  res.json(rows);
+});
+
+app.get('/api/tasks', (req, res) => {
+  const rows = db.prepare('SELECT * FROM tasks ORDER BY created_at DESC').all();
+  res.json(rows);
+});
+
+app.get('/api/conversations', (req, res) => {
+  const rows = db.prepare('SELECT * FROM conversations ORDER BY created_at DESC').all();
+  res.json(rows);
+});
+
+app.get('/api/fox-profile', (req, res) => {
+  res.json(profileSummary());
+});
+
+app.post('/api/clients', (req, res) => {
+  const { name, email, phone, notes } = req.body;
+  if (!name) return res.status(400).json({ error: 'اسم العميل مطلوب.' });
+
+  const stmt = db.prepare(`
+    INSERT INTO clients (name, email, phone, notes)
+    VALUES (?, ?, ?, ?)
+  `);
+
+  const result = stmt.run(name, email || '', phone || '', notes || '');
+  res.status(201).json({ id: result.lastInsertRowid, name, email, phone, notes });
+});
+
+app.post('/api/projects', (req, res) => {
+  const { title, client_id, type, budget, notes } = req.body;
+  if (!title) return res.status(400).json({ error: 'عنوان المشروع مطلوب.' });
+
+  const stmt = db.prepare(`
+    INSERT INTO projects (title, client_id, type, budget, notes)
+    VALUES (?, ?, ?, ?, ?)
+  `);
+
+  const result = stmt.run(title, client_id || null, type || 'website', budget || 0, notes || '');
+  res.status(201).json({ id: result.lastInsertRowid, title, client_id, type, budget, notes });
+});
+
+app.post('/api/tasks', (req, res) => {
+  const { title, project_id, status, notes } = req.body;
+  if (!title) return res.status(400).json({ error: 'عنوان المهمة مطلوب.' });
+
+  const stmt = db.prepare(`
+    INSERT INTO tasks (title, project_id, status, notes)
+    VALUES (?, ?, ?, ?)
+  `);
+
+  const result = stmt.run(title, project_id || null, status || 'pending', notes || '');
+  res.status(201).json({ id: result.lastInsertRowid, title, project_id, status, notes });
+});
+
+app.post('/api/assistant', async (req, res) => {
+  const { text } = req.body || {};
+
+  if (!text || !String(text).trim()) {
+    return res.status(400).json({ error: 'يرجى كتابة سؤال أو طلب.' });
+  }
+
+  const reply = await generateFoxReply(String(text));
+
+  const stmt = db.prepare(`
+    INSERT INTO conversations (speaker, message, intent, metadata)
+    VALUES (?, ?, ?, ?)
+  `);
+
+  stmt.run('user', String(text), 'assistant', JSON.stringify({ source: 'fox-assistant' }));
+  stmt.run('assistant', String(reply), 'assistant', JSON.stringify({ source: 'fox-assistant' }));
+
+  res.json({
+    ok: true,
+    reply,
+    source: HF_TOKEN ? 'huggingface' : 'local',
+    profile: FOX_PROFILE,
+  });
+});
+
+app.post('/api/voice', async (req, res) => {
+  const { text } = req.body;
+  const parsed = parseRequestIntent(text);
+
+  const userStmt = db.prepare(`
+    INSERT INTO conversations (speaker, message, intent, metadata)
+    VALUES (?, ?, ?, ?)
+  `);
+
+  userStmt.run('user', text || '', parsed.action, JSON.stringify(parsed));
+
+  const reply = await generateFoxReply(text || '');
+
+  const responseStmt = db.prepare(`
+    INSERT INTO conversations (speaker, message, intent, metadata)
+    VALUES (?, ?, ?, ?)
+  `);
+
+  responseStmt.run('assistant', reply, parsed.action, JSON.stringify({ source: 'voice', action: parsed.action }));
+
+  res.json({
+    ok: true,
+    intent: parsed.action,
+    summary: parsed.summary,
+    reply,
+  });
+});
+
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.get('/health', (req, res) => {
+  res.json({ ok: true, brand: 'FoxSD', agent: 'Fox AI' });
+});
+
+app.listen(PORT, () => {
+  console.log(`Fox AI Business Agent running on http://localhost:${PORT}`);
+  if (HF_TOKEN) {
+    console.log('Hugging Face AI integration is enabled.');
+  } else {
+    console.log('No HF_TOKEN was found. The assistant is running in local-personal mode.');
+  }
+});
